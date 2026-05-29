@@ -1,0 +1,34 @@
+version: thresholds_v0.1
+status: seed_from_v0.2_scaffold
+calibration:
+  phase: phase_minus_1_pending
+  train_start: null
+  train_end: null
+  test_start: null
+  test_end: null
+rolling_windows:
+  funding_days: 90
+  oi_days: 30
+  atr_periods: 14
+triggers:
+  funding_spike:
+    zscore_min: 2.0
+    robust_zscore_min: 2.5
+    percentile_min: 0.95
+  oi_pulse:
+    pct_change_window_hours: 24
+    percentile_min: 0.95
+  volatility_breakout:
+    atr_percentile_min: 0.90
+  candle_close:
+    enabled_timeframes:
+      - 1H
+      - 4H
+regime_policy:
+  trend:
+    ema_fast: 20
+    ema_slow: 50
+  high_volatility:
+    atr_percentile_min: 0.85
+  range:
+    ema_spread_max_atr: 0.5

@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openclaw.local/perp-analyst/schemas/ticket.schema.json",
+  "title": "OpenClaw Perp Analyst Ticket",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "ticket_id",
+    "event_id",
+    "event_schema_version",
+    "snapshot_hash",
+    "status",
+    "action",
+    "symbol",
+    "timeframe",
+    "self_reported_confidence",
+    "prompt_version",
+    "thresholds_version",
+    "risk_rules_version",
+    "agent_versions",
+    "entry_zone",
+    "invalid_condition",
+    "risk",
+    "bull_case",
+    "bear_case",
+    "why_not",
+    "human_checklist"
+  ],
+  "properties": {
+    "ticket_id": {
+      "type": "string",
+      "pattern": "^tkt_[0-9]{4}_[0-9]{2}_[0-9]{2}_[a-z0-9]+_[a-z0-9]+_[0-9]{3,}$"
+    },
+    "event_id": {
+      "type": "string",
+      "pattern": "^evt_[a-f0-9]{16,64}$"
+    },
+    "event_schema_version": {
+      "type": "string",
+      "const": "event_v0.1"
+    },
+    "snapshot_hash": {
+      "type": "string",
+      "pattern": "^sha256_[a-f0-9]{64}$"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "APPROVED_FOR_MANUAL_REVIEW",
+        "WATCH_ONLY",
+        "REJECTED_BY_RISK",
+        "NEED_MORE_DATA"
+      ]
+    },
+    "action": {
+      "type": "string",
+      "enum": ["NO_TRADE", "WATCH", "CONSIDER_LONG", "CONSIDER_SHORT"]
+    },
+    "symbol": {
+      "type": "string",
+      "enum": ["BTC-USDT-SWAP", "ETH-USDT-SWAP", "SOL-USDT-SWAP"]
+    },
+    "timeframe": {
+      "type": "string",
+      "enum": ["15m", "1H", "4H"]
+    },
+    "self_reported_confidence": {
+      "type": "string",
+      "enum": ["HIGH", "MEDIUM", "LOW"]
+    },
+    "prompt_version": {"type": "string"},
+    "thresholds_version": {
+      "type": "string",
+      "pattern": "^thresholds_v[0-9]+\\.[0-9]+$"
+    },
+    "risk_rules_version": {
+      "type": "string",
+      "pattern": "^risk_rules_v[0-9]+\\.[0-9]+$"
+    },
+    "agent_versions": {
+      "type": "object",
+      "additionalProperties": {"type": "string"}
+    },
+    "entry_zone": {"type": "string"},
+    "invalid_condition": {"type": "string"},
+    "risk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_loss_pct",
+        "max_loss_amount",
+        "suggested_leverage_cap",
+        "stop_distance_atr",
+        "suggested_position_size",
+        "liq_safety_margin",
+        "position_size_comment"
+      ],
+      "properties": {
+        "max_loss_pct": {"type": "number", "minimum": 0},
+        "max_loss_amount": {"type": "number", "minimum": 0},
+        "suggested_leverage_cap": {"type": "number", "minimum": 0},
+        "stop_distance_atr": {"type": "number", "minimum": 0},
+        "suggested_position_size": {"type": "number", "minimum": 0},
+        "liq_safety_margin": {
+          "type": "string",
+          "enum": ["PASS", "FAIL", "UNKNOWN"]
+        },
+        "position_size_comment": {"type": "string"}
+      }
+    },
+    "bull_case": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "bear_case": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "why_not": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "human_checklist": {
+      "type": "array",
+      "items": {"type": "string"}
+    }
+  }
+}

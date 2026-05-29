@@ -1,0 +1,25 @@
+version: risk_rules_v0.1
+mode: paper
+account:
+  paper_equity_usdt: 200.0
+  equity_source: config
+risk_limits:
+  max_loss_pct_per_trade: 1.0
+  max_daily_loss_pct: 3.0
+  max_consecutive_losses: 3
+  max_open_positions: 1
+  default_leverage_cap: 2.0
+  unconfirmed_trend_leverage_cap: 1.0
+  min_liq_stop_gap_atr: 1.0
+execution_assumptions:
+  margin_mode: isolated
+  fee_rate: 0.0006
+  slippage_rate: 0.0008
+  stop_distance_atr: 1.5
+verdict_policy:
+  technical_failed: REJECTED_BY_RISK
+  derivatives_failed: WATCH_ONLY
+  sentiment_failed_confidence_downgrade: true
+private_api:
+  enabled: false
+  note: v0.2 does not read account, position, or order APIs.

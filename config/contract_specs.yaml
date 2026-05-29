@@ -1,0 +1,37 @@
+version: contract_specs_v0.1
+source: manual_seed
+fetched_at: null
+symbols:
+  BTC-USDT-SWAP:
+    contract_value: 0.01
+    contract_value_currency: BTC
+    min_size: 0.01
+    size_increment: 0.01
+    price_tick: 0.1
+    quantity_precision: 2
+    price_precision: 1
+    maintenance_margin_tiers:
+      - notional_upper_usdt: 50000
+        maintenance_margin_rate: 0.004
+  ETH-USDT-SWAP:
+    contract_value: 0.1
+    contract_value_currency: ETH
+    min_size: 0.01
+    size_increment: 0.01
+    price_tick: 0.01
+    quantity_precision: 2
+    price_precision: 2
+    maintenance_margin_tiers:
+      - notional_upper_usdt: 50000
+        maintenance_margin_rate: 0.005
+  SOL-USDT-SWAP:
+    contract_value: 1.0
+    contract_value_currency: SOL
+    min_size: 0.01
+    size_increment: 0.01
+    price_tick: 0.001
+    quantity_precision: 2
+    price_precision: 3
+    maintenance_margin_tiers:
+      - notional_upper_usdt: 50000
+        maintenance_margin_rate: 0.01

@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Local runtime data
+data/*.db
+data/*.db-*
+data/latest_event.json
+
+# Generated reports
+reports/*.json
+reports/*.md
+
+# Local editor / OS files
+.DS_Store
+.obsidian/

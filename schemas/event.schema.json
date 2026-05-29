@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openclaw.local/perp-analyst/schemas/event.schema.json",
+  "title": "OpenClaw Perp Analyst Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_id",
+    "event_schema_version",
+    "created_at",
+    "symbol",
+    "timeframe",
+    "trigger_type",
+    "close_ts",
+    "market_snapshot",
+    "snapshot_hash",
+    "raw_refs",
+    "thresholds_version"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "pattern": "^evt_[a-f0-9]{16,64}$"
+    },
+    "event_schema_version": {
+      "type": "string",
+      "const": "event_v0.1"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "symbol": {
+      "type": "string",
+      "enum": ["BTC-USDT-SWAP", "ETH-USDT-SWAP", "SOL-USDT-SWAP"]
+    },
+    "timeframe": {
+      "type": "string",
+      "enum": ["15m", "1H", "4H"]
+    },
+    "trigger_type": {
+      "type": "string",
+      "enum": [
+        "CANDLE_CLOSE_1H",
+        "CANDLE_CLOSE_4H",
+        "FUNDING_SPIKE",
+        "OI_PULSE",
+        "VOLATILITY_BREAKOUT",
+        "MANUAL_REVIEW",
+        "ANALYSIS_FAILED",
+        "DATA_STALE",
+        "HEARTBEAT_SILENT",
+        "DUPLICATE_EVENT_SKIPPED"
+      ]
+    },
+    "close_ts": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "market_snapshot": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["symbol", "timeframe", "close_ts", "features"],
+      "properties": {
+        "symbol": {"type": "string"},
+        "timeframe": {"type": "string"},
+        "close_ts": {"type": "integer"},
+        "features": {
+          "type": "object",
+          "additionalProperties": {
+            "type": ["number", "string", "boolean", "null"]
+          }
+        },
+        "regime": {
+          "type": "string",
+          "enum": ["trend", "range", "high_volatility", "unknown"]
+        },
+        "data_fetched_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "notes": {
+          "type": "array",
+          "items": {"type": "string"}
+        }
+      }
+    },
+    "snapshot_hash": {
+      "type": "string",
+      "pattern": "^sha256_[a-f0-9]{64}$"
+    },
+    "raw_refs": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "thresholds_version": {
+      "type": "string",
+      "pattern": "^thresholds_v[0-9]+\\.[0-9]+$"
+    }
+  }
+}

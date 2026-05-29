@@ -14,6 +14,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from analysis import db
+from analysis.calibration import summarize_triggers
 from analysis.factors import rolling_factor_stats, simple_regime
 from analysis.indicators import enrich_rows
 from analysis.risk_validator import RiskInput, validate_risk
@@ -63,6 +64,7 @@ def replay(rows: List[dict[str, Any]], thresholds: dict[str, Any], db_path: Path
         )
     histories: Dict[str, Dict[str, Deque[float]]] = defaultdict(lambda: defaultdict(lambda: deque(maxlen=240)))
     trigger_counts: Dict[str, int] = defaultdict(int)
+    trigger_records: List[dict[str, Any]] = []
     inserted_events = 0
     duplicate_events = 0
     tickets = 0
@@ -86,6 +88,16 @@ def replay(rows: List[dict[str, Any]], thresholds: dict[str, Any], db_path: Path
             triggers = _triggers(row, thresholds, funding_stats, oi_stats, atr_stats)
             for trigger_type in triggers:
                 trigger_counts[trigger_type] += 1
+                trigger_records.append(
+                    {
+                        "symbol": row["symbol"],
+                        "timeframe": row["timeframe"],
+                        "close_ts": row["close_ts"],
+                        "close": row["close"],
+                        "trigger_type": trigger_type,
+                        "regime": regime,
+                    }
+                )
                 snapshot = {
                     "symbol": row["symbol"],
                     "timeframe": row["timeframe"],
@@ -163,6 +175,7 @@ def replay(rows: List[dict[str, Any]], thresholds: dict[str, Any], db_path: Path
         "duplicate_events": duplicate_events,
         "tickets": tickets,
         "trigger_counts": dict(sorted(trigger_counts.items())),
+        "outcome_summary": summarize_triggers(rows, trigger_records),
         "private_api": "not_used",
     }
 

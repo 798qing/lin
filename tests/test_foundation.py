@@ -3,11 +3,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from collectors.okx_public import Candle, FundingRate, OkxPublicClient, OpenInterest, merge_rows
+from analysis.calibration import summarize_triggers
 from analysis.factors import percentile_rank, robust_zscore, simple_regime, zscore
 from analysis.indicators import enrich_rows
 from analysis.risk_validator import APPROVED, REJECTED, WATCH_ONLY, RiskInput, validate_risk
 from analysis.schema_validation import validate_event
+from collectors.okx_public import Candle, FundingRate, OkxPublicClient, OpenInterest, merge_rows
 from scripts.replay_phase_minus_1 import DEFAULT_SAMPLE, _load_rows, replay
 from watchdog.event_builder import build_event
 
@@ -117,6 +118,35 @@ class FoundationTests(unittest.TestCase):
             report = replay(rows, thresholds, Path(tmpdir) / "test.db", DEFAULT_SAMPLE)
         self.assertEqual(report["private_api"], "not_used")
         self.assertGreater(report["inserted_events"], 0)
+        self.assertIn("outcome_summary", report)
+
+    def test_calibration_outcome_summary(self):
+        rows = [
+            {
+                "close_ts": index,
+                "symbol": "SOL-USDT-SWAP",
+                "timeframe": "1H",
+                "open": 100 + index,
+                "high": 101 + index,
+                "low": 99 + index,
+                "close": 100 + index,
+                "volume": 1000,
+                "funding": 0.0,
+                "oi": 1000.0,
+            }
+            for index in range(1, 8)
+        ]
+        triggers = [
+            {"symbol": "SOL-USDT-SWAP", "timeframe": "1H", "close_ts": 1, "trigger_type": "CANDLE_CLOSE_1H", "regime": "trend"},
+            {"symbol": "SOL-USDT-SWAP", "timeframe": "1H", "close_ts": 6, "trigger_type": "CANDLE_CLOSE_1H", "regime": "range"},
+        ]
+        report = summarize_triggers(rows, triggers, horizons=(1, 4), train_fraction=0.5)
+        trigger_summary = report["by_trigger"]["CANDLE_CLOSE_1H"]["horizons"]
+        self.assertEqual(trigger_summary["1"]["events"], 2)
+        self.assertEqual(trigger_summary["1"]["complete"], 2)
+        self.assertEqual(trigger_summary["4"]["missing_future"], 1)
+        self.assertIn("CANDLE_CLOSE_1H|train", report["by_trigger_and_split"])
+        self.assertIn("CANDLE_CLOSE_1H|test", report["by_trigger_and_split"])
 
     def test_okx_public_request_has_no_private_auth_headers(self):
         seen = {}

@@ -1,9 +1,18 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return "sha256_" + digest.hexdigest()
 
 
 def default_manifest_path(csv_path: Path) -> Path:
@@ -25,6 +34,7 @@ def build_public_manifest(
         "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "source": source,
         "csv_path": str(csv_path),
+        "csv_sha256": file_sha256(csv_path),
         "symbols": symbols,
         "timeframe": timeframe,
         "limit": limit,

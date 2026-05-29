@@ -7,7 +7,7 @@ import sys
 from collections import defaultdict, deque
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Deque, Dict, List
+from typing import Any, Deque, Dict, List, Optional
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -21,7 +21,7 @@ from analysis.indicators import enrich_rows
 from analysis.risk_validator import RiskInput, validate_risk
 from analysis.schema_validation import validate_ticket
 from analysis.simple_yaml import load_yaml
-from collectors.manifest import default_manifest_path, load_manifest_for_csv
+from collectors.manifest import default_manifest_path, file_sha256, load_manifest_for_csv
 from watchdog.event_builder import build_event
 
 
@@ -63,9 +63,11 @@ def replay(rows: List[dict[str, Any]], thresholds: dict[str, Any], db_path: Path
             atr_period=int(thresholds.get("rolling_windows", {}).get("atr_periods", 14)),
             ema_fast=int(thresholds.get("regime_policy", {}).get("trend", {}).get("ema_fast", 20)),
             ema_slow=int(thresholds.get("regime_policy", {}).get("trend", {}).get("ema_slow", 50)),
-        )
+    )
     data_quality = audit_rows(rows)
     raw_refs = _raw_refs(source_path)
+    raw_manifest = load_manifest_for_csv(source_path)
+    raw_integrity = _raw_integrity(raw_refs, raw_manifest)
     histories: Dict[str, Dict[str, Deque[float]]] = defaultdict(lambda: defaultdict(lambda: deque(maxlen=240)))
     trigger_counts: Dict[str, int] = defaultdict(int)
     trigger_records: List[dict[str, Any]] = []
@@ -181,7 +183,8 @@ def replay(rows: List[dict[str, Any]], thresholds: dict[str, Any], db_path: Path
         "trigger_counts": dict(sorted(trigger_counts.items())),
         "data_quality": data_quality,
         "raw_refs": raw_refs,
-        "raw_manifest": load_manifest_for_csv(source_path),
+        "raw_manifest": raw_manifest,
+        "raw_integrity": raw_integrity,
         "outcome_summary": summarize_triggers(rows, trigger_records),
         "private_api": "not_used",
     }
@@ -189,10 +192,47 @@ def replay(rows: List[dict[str, Any]], thresholds: dict[str, Any], db_path: Path
 
 def _raw_refs(source_path: Path) -> dict[str, str]:
     refs = {"csv": str(source_path)}
+    if source_path.exists():
+        refs["csv_sha256"] = file_sha256(source_path)
     manifest_path = default_manifest_path(source_path)
     if manifest_path.exists():
         refs["manifest"] = str(manifest_path)
+        refs["manifest_sha256"] = file_sha256(manifest_path)
     return refs
+
+
+def _raw_integrity(raw_refs: dict[str, str], raw_manifest: Optional[dict[str, Any]]) -> dict[str, Any]:
+    issues: List[dict[str, str]] = []
+    actual_csv_hash = raw_refs.get("csv_sha256")
+    if not actual_csv_hash:
+        issues.append({"severity": "FAIL", "code": "CSV_MISSING", "message": "CSV file is missing or cannot be hashed."})
+    if raw_manifest is None:
+        issues.append({"severity": "WARN", "code": "MANIFEST_MISSING", "message": "Raw data manifest is missing."})
+    else:
+        expected_csv_hash = raw_manifest.get("csv_sha256")
+        if not expected_csv_hash:
+            issues.append(
+                {
+                    "severity": "WARN",
+                    "code": "MANIFEST_CSV_HASH_MISSING",
+                    "message": "Raw data manifest does not include csv_sha256.",
+                }
+            )
+        elif actual_csv_hash and expected_csv_hash != actual_csv_hash:
+            issues.append(
+                {
+                    "severity": "FAIL",
+                    "code": "CSV_SHA256_MISMATCH",
+                    "message": "CSV sha256 does not match the raw data manifest.",
+                }
+            )
+    if any(issue["severity"] == "FAIL" for issue in issues):
+        status = "FAIL"
+    elif issues:
+        status = "WARN"
+    else:
+        status = "PASS"
+    return {"status": status, "issues": issues}
 
 
 def _load_rows(path: Path) -> List[dict[str, Any]]:

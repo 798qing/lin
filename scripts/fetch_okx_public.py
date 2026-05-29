@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from collectors.manifest import build_public_manifest, default_manifest_path, write_manifest
+from collectors.manifest import build_public_manifest, default_manifest_path, file_sha256, write_manifest
 from collectors.okx_public import OKX_BASE_URL, OkxPublicClient, merge_rows
 
 
@@ -59,7 +59,9 @@ def main() -> None:
     )
     write_manifest(manifest_path, manifest)
     print(f"Wrote {len(rows)} public OKX rows to {out}")
+    print(f"CSV sha256: {manifest['csv_sha256']}")
     print(f"Wrote manifest to {manifest_path}")
+    print(f"Manifest sha256: {file_sha256(manifest_path)}")
     print("private_api=not_used")
 
 

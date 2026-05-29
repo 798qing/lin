@@ -21,6 +21,7 @@ from analysis.indicators import enrich_rows
 from analysis.risk_validator import RiskInput, validate_risk
 from analysis.schema_validation import validate_ticket
 from analysis.simple_yaml import load_yaml
+from collectors.manifest import default_manifest_path, load_manifest_for_csv
 from watchdog.event_builder import build_event
 
 
@@ -64,6 +65,7 @@ def replay(rows: List[dict[str, Any]], thresholds: dict[str, Any], db_path: Path
             ema_slow=int(thresholds.get("regime_policy", {}).get("trend", {}).get("ema_slow", 50)),
         )
     data_quality = audit_rows(rows)
+    raw_refs = _raw_refs(source_path)
     histories: Dict[str, Dict[str, Deque[float]]] = defaultdict(lambda: defaultdict(lambda: deque(maxlen=240)))
     trigger_counts: Dict[str, int] = defaultdict(int)
     trigger_records: List[dict[str, Any]] = []
@@ -129,7 +131,7 @@ def replay(rows: List[dict[str, Any]], thresholds: dict[str, Any], db_path: Path
                     trigger_type=trigger_type,
                     close_ts=row["close_ts"],
                     market_snapshot=snapshot,
-                    raw_refs={"csv": str(source_path)},
+                    raw_refs=raw_refs,
                     thresholds_version=thresholds["version"],
                 )
                 if db.insert_event(conn, event):
@@ -178,9 +180,19 @@ def replay(rows: List[dict[str, Any]], thresholds: dict[str, Any], db_path: Path
         "tickets": tickets,
         "trigger_counts": dict(sorted(trigger_counts.items())),
         "data_quality": data_quality,
+        "raw_refs": raw_refs,
+        "raw_manifest": load_manifest_for_csv(source_path),
         "outcome_summary": summarize_triggers(rows, trigger_records),
         "private_api": "not_used",
     }
+
+
+def _raw_refs(source_path: Path) -> dict[str, str]:
+    refs = {"csv": str(source_path)}
+    manifest_path = default_manifest_path(source_path)
+    if manifest_path.exists():
+        refs["manifest"] = str(manifest_path)
+    return refs
 
 
 def _load_rows(path: Path) -> List[dict[str, Any]]:

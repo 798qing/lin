@@ -10,6 +10,7 @@ from analysis.indicators import enrich_rows
 from analysis.risk_validator import APPROVED, REJECTED, WATCH_ONLY, RiskInput, validate_risk
 from analysis.schema_validation import validate_event
 from analysis.simple_yaml import load_yaml
+from collectors.manifest import build_public_manifest, default_manifest_path, write_manifest
 from collectors.okx_public import Candle, FundingRate, OkxPublicClient, OpenInterest, merge_rows
 from scripts.replay_phase_minus_1 import DEFAULT_SAMPLE, _load_rows, replay
 from watchdog.event_builder import build_event
@@ -122,6 +123,29 @@ class FoundationTests(unittest.TestCase):
         self.assertGreater(report["inserted_events"], 0)
         self.assertIn("outcome_summary", report)
         self.assertIn("data_quality", report)
+
+    def test_replay_includes_manifest_refs(self):
+        rows = _load_rows(DEFAULT_SAMPLE)[:8]
+        thresholds = {
+            "version": "thresholds_v0.1",
+            "regime_policy": {
+                "high_volatility": {"atr_percentile_min": 0.85},
+                "range": {"ema_spread_max_atr": 0.5},
+            },
+            "triggers": {
+                "funding_spike": {"zscore_min": 2.0, "robust_zscore_min": 2.5, "percentile_min": 0.95},
+                "oi_pulse": {"percentile_min": 0.95},
+                "volatility_breakout": {"atr_percentile_min": 0.9},
+            },
+        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            csv_path = Path(tmpdir) / "sample.csv"
+            csv_path.write_text(DEFAULT_SAMPLE.read_text(encoding="utf-8"), encoding="utf-8")
+            manifest = build_public_manifest(csv_path, "unit-test", ["SOL-USDT-SWAP"], "1H", 8, 1, len(rows))
+            write_manifest(default_manifest_path(csv_path), manifest)
+            report = replay(rows, thresholds, Path(tmpdir) / "test.db", csv_path)
+        self.assertIn("manifest", report["raw_refs"])
+        self.assertEqual(report["raw_manifest"]["private_api"], "not_used")
 
     def test_data_quality_audit(self):
         rows = [

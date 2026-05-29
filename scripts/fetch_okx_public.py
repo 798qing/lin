@@ -10,7 +10,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from collectors.okx_public import OkxPublicClient, merge_rows
+from collectors.manifest import build_public_manifest, default_manifest_path, write_manifest
+from collectors.okx_public import OKX_BASE_URL, OkxPublicClient, merge_rows
 
 
 DEFAULT_OUT = ROOT / "data" / "okx_public_ohlcv.csv"
@@ -25,6 +26,7 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=100, help="Rows per OKX page, capped at 100.")
     parser.add_argument("--pages", type=int, default=1, help="Number of public history pages to fetch per symbol.")
     parser.add_argument("--out", default=str(DEFAULT_OUT))
+    parser.add_argument("--manifest", default=None, help="Manifest output path. Defaults to <csv>.manifest.json")
     args = parser.parse_args()
 
     client = OkxPublicClient()
@@ -44,7 +46,20 @@ def main() -> None:
         writer = csv.DictWriter(handle, fieldnames=FIELDS)
         writer.writeheader()
         writer.writerows(rows)
+    manifest_path = Path(args.manifest) if args.manifest else default_manifest_path(out)
+    manifest = build_public_manifest(
+        csv_path=out,
+        source=OKX_BASE_URL,
+        symbols=symbols,
+        timeframe=args.bar,
+        limit=args.limit,
+        pages=args.pages,
+        row_count=len(rows),
+        extra={"funding_pages": max(1, min(args.pages, 10))},
+    )
+    write_manifest(manifest_path, manifest)
     print(f"Wrote {len(rows)} public OKX rows to {out}")
+    print(f"Wrote manifest to {manifest_path}")
     print("private_api=not_used")
 
 

@@ -41,3 +41,6 @@ endpoint, or execution path.
 
 `calibrate_thresholds.py` writes a review-only candidate file. It does not
 overwrite `config/thresholds.yaml`.
+
+`fetch_okx_public.py` also writes `<csv>.manifest.json` with public data source
+metadata. Replay reports include that manifest in `raw_refs` when present.

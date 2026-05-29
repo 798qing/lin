@@ -12,6 +12,7 @@ data/*.db
 data/*.db-*
 data/latest_event.json
 data/okx_public_*.csv
+data/*.manifest.json
 
 # Generated reports
 reports/*.json

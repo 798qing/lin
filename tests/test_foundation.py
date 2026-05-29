@@ -14,6 +14,7 @@ from analysis.schema_validation import validate_event
 from analysis.simple_yaml import load_yaml
 from collectors.manifest import build_public_manifest, default_manifest_path, file_sha256, write_manifest
 from collectors.okx_public import Candle, FundingRate, OkxPublicClient, OpenInterest, merge_rows
+from gateway.openclaw_bridge import render_single_event_markdown
 from scripts.export_trace import export_trace
 from scripts.replay_phase_minus_1 import DEFAULT_SAMPLE, _load_rows, replay
 from watchdog.event_builder import build_event
@@ -83,6 +84,34 @@ class FoundationTests(unittest.TestCase):
         self.assertTrue(event["event_id"].startswith("evt_"))
         self.assertTrue(event["snapshot_hash"].startswith("sha256_"))
 
+    def test_markdown_report_includes_trigger_evidence(self):
+        event = build_event(
+            symbol="SOL-USDT-SWAP",
+            timeframe="1H",
+            trigger_type="FUNDING_SPIKE",
+            close_ts=1761955200,
+            market_snapshot={
+                "symbol": "SOL-USDT-SWAP",
+                "timeframe": "1H",
+                "close_ts": 1761955200,
+                "features": {"close": 100.0},
+                "regime": "range",
+                "trigger_evidence": {
+                    "trigger_type": "FUNDING_SPIKE",
+                    "reason": "Funding is elevated versus rolling history.",
+                    "distribution_position": "top_5pct",
+                    "metrics": {"funding_percentile": 0.98},
+                    "thresholds": {"percentile_min": 0.95},
+                    "conditions": {"percentile": {"value": 0.98, "threshold": 0.95, "operator": ">=", "passed": True}},
+                },
+            },
+            raw_refs={"unit": "test"},
+            thresholds_version="thresholds_v0.1",
+        )
+        markdown = render_single_event_markdown(event)
+        self.assertIn("## Trigger Evidence", markdown)
+        self.assertIn("top_5pct", markdown)
+
     def test_risk_validator_degrade_chain(self):
         base = RiskInput(
             symbol="SOL-USDT-SWAP",
@@ -127,6 +156,8 @@ class FoundationTests(unittest.TestCase):
         self.assertIn("outcome_summary", report)
         self.assertIn("data_quality", report)
         self.assertEqual(report["ticket_cost_estimate"]["private_api"], "not_used")
+        self.assertIn("CANDLE_CLOSE_1H", report["trigger_evidence_summary"])
+        self.assertEqual(report["trigger_evidence_summary"]["CANDLE_CLOSE_1H"]["distribution_positions"]["scheduled"], 8)
 
     def test_export_trace_reconstructs_event_chain(self):
         rows = _load_rows(DEFAULT_SAMPLE)[:8]
@@ -152,6 +183,10 @@ class FoundationTests(unittest.TestCase):
         self.assertTrue(trace["analysis_runs"])
         self.assertTrue(trace["analysis_runs"][0]["risk_checks"])
         self.assertTrue(trace["analysis_runs"][0]["tickets"])
+        evidence = trace["event"]["market_snapshot"]["trigger_evidence"]
+        self.assertEqual(evidence["trigger_type"], trace["event"]["trigger_type"])
+        self.assertIn("reason", evidence)
+        self.assertIn("distribution_position", evidence)
 
     def test_replay_includes_manifest_refs(self):
         rows = _load_rows(DEFAULT_SAMPLE)[:8]

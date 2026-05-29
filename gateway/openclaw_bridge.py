@@ -32,6 +32,23 @@ def render_single_event_markdown(event: dict[str, Any]) -> str:
     ]
     for key in sorted(features):
         lines.append(f"- {key}: `{features[key]}`")
+    evidence = event["market_snapshot"].get("trigger_evidence")
+    if evidence:
+        lines.extend(
+            [
+                "",
+                "## Trigger Evidence",
+                "",
+                f"- reason: `{evidence.get('reason')}`",
+                f"- distribution_position: `{evidence.get('distribution_position')}`",
+            ]
+        )
+        for key, value in sorted(evidence.get("metrics", {}).items()):
+            lines.append(f"- metric.{key}: `{value}`")
+        for key, value in sorted(evidence.get("thresholds", {}).items()):
+            lines.append(f"- threshold.{key}: `{value}`")
+        for key, value in sorted(evidence.get("conditions", {}).items()):
+            lines.append(f"- condition.{key}: `{value}`")
     lines.extend(
         [
             "",

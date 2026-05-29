@@ -92,8 +92,9 @@ def replay(rows: List[dict[str, Any]], thresholds: dict[str, Any], db_path: Path
                 high_volatility_threshold=float(thresholds["regime_policy"]["high_volatility"]["atr_percentile_min"]),
                 range_spread_atr=float(thresholds["regime_policy"]["range"]["ema_spread_max_atr"]),
             )
-            triggers = _triggers(row, thresholds, funding_stats, oi_stats, atr_stats)
-            for trigger_type in triggers:
+            trigger_evidence = _trigger_evidence(row, thresholds, funding_stats, oi_stats, atr_stats)
+            for evidence in trigger_evidence:
+                trigger_type = evidence["trigger_type"]
                 trigger_counts[trigger_type] += 1
                 trigger_records.append(
                     {
@@ -103,6 +104,7 @@ def replay(rows: List[dict[str, Any]], thresholds: dict[str, Any], db_path: Path
                         "close": row["close"],
                         "trigger_type": trigger_type,
                         "regime": regime,
+                        "evidence": evidence,
                     }
                 )
                 snapshot = {
@@ -124,6 +126,7 @@ def replay(rows: List[dict[str, Any]], thresholds: dict[str, Any], db_path: Path
                         "oi_24h_pct": oi_change,
                         "oi_24h_percentile": oi_stats.percentile,
                     },
+                    "trigger_evidence": evidence,
                     "regime": regime,
                     "data_fetched_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
                     "notes": ["Phase -1 replay; no LLM and no private API."],
@@ -182,6 +185,7 @@ def replay(rows: List[dict[str, Any]], thresholds: dict[str, Any], db_path: Path
         "duplicate_events": duplicate_events,
         "tickets": tickets,
         "trigger_counts": dict(sorted(trigger_counts.items())),
+        "trigger_evidence_summary": _trigger_evidence_summary(trigger_records),
         "data_quality": data_quality,
         "raw_refs": raw_refs,
         "raw_manifest": raw_manifest,
@@ -292,24 +296,144 @@ def _write_sample(path: Path) -> None:
         writer.writerows(rows)
 
 
-def _triggers(row: dict[str, Any], thresholds: dict[str, Any], funding_stats: Any, oi_stats: Any, atr_stats: Any) -> List[str]:
-    triggers: List[str] = []
+def _trigger_evidence(row: dict[str, Any], thresholds: dict[str, Any], funding_stats: Any, oi_stats: Any, atr_stats: Any) -> List[dict[str, Any]]:
+    triggers: List[dict[str, Any]] = []
+    enabled_timeframes = thresholds.get("triggers", {}).get("candle_close", {}).get("enabled_timeframes", [row["timeframe"]])
     if row["timeframe"] == "1H":
-        triggers.append("CANDLE_CLOSE_1H")
+        triggers.append(
+            {
+                "trigger_type": "CANDLE_CLOSE_1H",
+                "reason": "Scheduled 1H candle close.",
+                "metrics": {"timeframe": row["timeframe"], "close_ts": row["close_ts"]},
+                "thresholds": {"enabled_timeframes": enabled_timeframes},
+                "distribution_position": "scheduled",
+            }
+        )
     if row["timeframe"] == "4H":
-        triggers.append("CANDLE_CLOSE_4H")
+        triggers.append(
+            {
+                "trigger_type": "CANDLE_CLOSE_4H",
+                "reason": "Scheduled 4H candle close.",
+                "metrics": {"timeframe": row["timeframe"], "close_ts": row["close_ts"]},
+                "thresholds": {"enabled_timeframes": enabled_timeframes},
+                "distribution_position": "scheduled",
+            }
+        )
     funding_cfg = thresholds["triggers"]["funding_spike"]
-    if (
-        (funding_stats.zscore is not None and funding_stats.zscore >= float(funding_cfg["zscore_min"]))
-        or (funding_stats.robust_zscore is not None and funding_stats.robust_zscore >= float(funding_cfg["robust_zscore_min"]))
-        or (funding_stats.percentile is not None and funding_stats.percentile >= float(funding_cfg["percentile_min"]))
-    ):
-        triggers.append("FUNDING_SPIKE")
-    if oi_stats.percentile is not None and oi_stats.percentile >= float(thresholds["triggers"]["oi_pulse"]["percentile_min"]):
-        triggers.append("OI_PULSE")
-    if atr_stats.percentile is not None and atr_stats.percentile >= float(thresholds["triggers"]["volatility_breakout"]["atr_percentile_min"]):
-        triggers.append("VOLATILITY_BREAKOUT")
+    funding_conditions = {
+        "zscore": _condition(funding_stats.zscore, funding_cfg["zscore_min"]),
+        "robust_zscore": _condition(funding_stats.robust_zscore, funding_cfg["robust_zscore_min"]),
+        "percentile": _condition(funding_stats.percentile, funding_cfg["percentile_min"]),
+    }
+    if any(item["passed"] for item in funding_conditions.values()):
+        triggers.append(
+            {
+                "trigger_type": "FUNDING_SPIKE",
+                "reason": "Funding is elevated versus rolling history.",
+                "metrics": {
+                    "funding": row["funding"],
+                    "funding_zscore": funding_stats.zscore,
+                    "funding_robust_zscore": funding_stats.robust_zscore,
+                    "funding_percentile": funding_stats.percentile,
+                    "window_size": funding_stats.window_size,
+                },
+                "thresholds": {
+                    "zscore_min": float(funding_cfg["zscore_min"]),
+                    "robust_zscore_min": float(funding_cfg["robust_zscore_min"]),
+                    "percentile_min": float(funding_cfg["percentile_min"]),
+                },
+                "conditions": funding_conditions,
+                "distribution_position": _distribution_position(funding_stats.percentile),
+            }
+        )
+    oi_cfg = thresholds["triggers"]["oi_pulse"]
+    oi_condition = _condition(oi_stats.percentile, oi_cfg["percentile_min"])
+    if oi_condition["passed"]:
+        triggers.append(
+            {
+                "trigger_type": "OI_PULSE",
+                "reason": "Open interest change is elevated versus rolling history.",
+                "metrics": {
+                    "oi": row["oi"],
+                    "oi_24h_pct": oi_stats.value,
+                    "oi_24h_percentile": oi_stats.percentile,
+                    "window_size": oi_stats.window_size,
+                },
+                "thresholds": {
+                    "pct_change_window_hours": int(oi_cfg["pct_change_window_hours"]),
+                    "percentile_min": float(oi_cfg["percentile_min"]),
+                },
+                "conditions": {"percentile": oi_condition},
+                "distribution_position": _distribution_position(oi_stats.percentile),
+            }
+        )
+    volatility_cfg = thresholds["triggers"]["volatility_breakout"]
+    atr_condition = _condition(atr_stats.percentile, volatility_cfg["atr_percentile_min"])
+    if atr_condition["passed"]:
+        triggers.append(
+            {
+                "trigger_type": "VOLATILITY_BREAKOUT",
+                "reason": "ATR is elevated versus rolling history.",
+                "metrics": {
+                    "atr": row["atr"],
+                    "atr_percentile": atr_stats.percentile,
+                    "window_size": atr_stats.window_size,
+                },
+                "thresholds": {"atr_percentile_min": float(volatility_cfg["atr_percentile_min"])},
+                "conditions": {"percentile": atr_condition},
+                "distribution_position": _distribution_position(atr_stats.percentile),
+            }
+        )
     return triggers
+
+
+def _condition(value: Any, threshold: Any) -> dict[str, Any]:
+    threshold_value = float(threshold)
+    passed = value is not None and float(value) >= threshold_value
+    return {"value": value, "threshold": threshold_value, "operator": ">=", "passed": passed}
+
+
+def _distribution_position(percentile: Any) -> str:
+    if percentile is None:
+        return "insufficient_history"
+    value = float(percentile)
+    if value >= 0.95:
+        return "top_5pct"
+    if value >= 0.90:
+        return "top_10pct"
+    if value >= 0.75:
+        return "top_quartile"
+    if value <= 0.25:
+        return "bottom_quartile"
+    return "middle_range"
+
+
+def _trigger_evidence_summary(trigger_records: List[dict[str, Any]]) -> dict[str, Any]:
+    summary: Dict[str, dict[str, Any]] = {}
+    for record in trigger_records:
+        trigger_type = record["trigger_type"]
+        evidence = record.get("evidence", {})
+        bucket = summary.setdefault(
+            trigger_type,
+            {
+                "records": 0,
+                "distribution_positions": defaultdict(int),
+                "condition_pass_counts": defaultdict(int),
+            },
+        )
+        bucket["records"] += 1
+        bucket["distribution_positions"][evidence.get("distribution_position", "unknown")] += 1
+        for name, condition in evidence.get("conditions", {}).items():
+            if condition.get("passed"):
+                bucket["condition_pass_counts"][name] += 1
+    return {
+        trigger_type: {
+            "records": bucket["records"],
+            "distribution_positions": dict(sorted(bucket["distribution_positions"].items())),
+            "condition_pass_counts": dict(sorted(bucket["condition_pass_counts"].items())),
+        }
+        for trigger_type, bucket in sorted(summary.items())
+    }
 
 
 def _pct_change(current: float, previous: Any) -> Any:

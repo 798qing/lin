@@ -25,6 +25,7 @@ python3 main.py init-db
 python3 main.py replay
 python3 scripts/export_latest_event.py --out data/latest_event.json
 python3 main.py trace --out reports/latest_trace.json
+python3 scripts/estimate_ticket_cost.py --out reports/ticket_cost_estimate.json
 python3 -m gateway.openclaw_bridge data/latest_event.json --out reports/latest_event.md
 ```
 
@@ -50,3 +51,6 @@ when present and flag raw-data hash mismatches in `raw_integrity`.
 `main.py trace` exports a read-only audit trace for the latest event, including
 the frozen event input, analysis runs, risk checks, tickets, version fields, and
 traceability status.
+
+`estimate_ticket_cost.py` estimates the per-ticket LLM cost budget from local
+prompt files and `config/cost_budget.yaml`. It does not call any model.

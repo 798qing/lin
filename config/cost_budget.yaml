@@ -1,0 +1,37 @@
+version: cost_budget_v0.1
+status: seed_for_phase_minus_1
+max_ticket_cost_usd: 0.05
+token_estimation:
+  chars_per_token: 4
+  event_input_tokens: 1200
+agents:
+  cio:
+    prompt_path: config/prompts/cio_v0.1.md
+    input_tokens: 1600
+    output_tokens: 900
+    usd_per_1m_input_tokens: 1.25
+    usd_per_1m_output_tokens: 10.0
+  technical:
+    prompt_path: config/prompts/technical_v0.1.md
+    input_tokens: 1400
+    output_tokens: 700
+    usd_per_1m_input_tokens: 1.25
+    usd_per_1m_output_tokens: 10.0
+  derivatives:
+    prompt_path: config/prompts/derivatives_v0.1.md
+    input_tokens: 1200
+    output_tokens: 600
+    usd_per_1m_input_tokens: 1.25
+    usd_per_1m_output_tokens: 10.0
+  sentiment:
+    prompt_path: config/prompts/sentiment_v0.1.md
+    input_tokens: 900
+    output_tokens: 500
+    usd_per_1m_input_tokens: 1.25
+    usd_per_1m_output_tokens: 10.0
+  cro:
+    prompt_path: config/prompts/cro_v0.1.md
+    input_tokens: 1000
+    output_tokens: 500
+    usd_per_1m_input_tokens: 1.25
+    usd_per_1m_output_tokens: 10.0

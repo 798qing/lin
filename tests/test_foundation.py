@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from analysis.calibration import dump_thresholds_yaml, summarize_triggers, suggest_thresholds
+from analysis.costing import estimate_ticket_cost
 from analysis.data_quality import audit_rows
 from analysis.factors import percentile_rank, robust_zscore, simple_regime, zscore
 from analysis.indicators import enrich_rows
@@ -124,6 +125,7 @@ class FoundationTests(unittest.TestCase):
         self.assertGreater(report["inserted_events"], 0)
         self.assertIn("outcome_summary", report)
         self.assertIn("data_quality", report)
+        self.assertEqual(report["ticket_cost_estimate"]["private_api"], "not_used")
 
     def test_export_trace_reconstructs_event_chain(self):
         rows = _load_rows(DEFAULT_SAMPLE)[:8]
@@ -300,6 +302,40 @@ class FoundationTests(unittest.TestCase):
         self.assertEqual(parsed["version"], "thresholds_v0.1")
         self.assertTrue(parsed["calibration"]["review_required"])
         self.assertIn("data_quality", parsed)
+
+    def test_ticket_cost_estimate_budget_status(self):
+        estimate = estimate_ticket_cost(ROOT / "config" / "cost_budget.yaml")
+        self.assertEqual(estimate["private_api"], "not_used")
+        self.assertEqual(estimate["status"], "PASS")
+        self.assertGreater(estimate["total_cost_usd_estimate"], 0)
+        self.assertLessEqual(estimate["total_cost_usd_estimate"], estimate["max_ticket_cost_usd"])
+
+    def test_ticket_cost_estimate_flags_over_budget(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            prompt_path = Path(tmpdir) / "prompt.md"
+            prompt_path.write_text("Prompt", encoding="utf-8")
+            config_path = Path(tmpdir) / "cost_budget.yaml"
+            config_path.write_text(
+                "\n".join(
+                    [
+                        "version: cost_budget_test",
+                        "max_ticket_cost_usd: 0.000001",
+                        "token_estimation:",
+                        "  chars_per_token: 4",
+                        "  event_input_tokens: 1000",
+                        "agents:",
+                        "  test:",
+                        f"    prompt_path: {prompt_path}",
+                        "    input_tokens: 1000",
+                        "    output_tokens: 1000",
+                        "    usd_per_1m_input_tokens: 10.0",
+                        "    usd_per_1m_output_tokens: 10.0",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            estimate = estimate_ticket_cost(config_path)
+        self.assertEqual(estimate["status"], "REDUCE_AGENT_ROUNDS")
 
     def test_okx_public_request_has_no_private_auth_headers(self):
         seen = {}

@@ -15,6 +15,7 @@ if str(ROOT) not in sys.path:
 
 from analysis import db
 from analysis.calibration import summarize_triggers
+from analysis.costing import estimate_ticket_cost
 from analysis.data_quality import audit_rows
 from analysis.factors import rolling_factor_stats, simple_regime
 from analysis.indicators import enrich_rows
@@ -185,6 +186,7 @@ def replay(rows: List[dict[str, Any]], thresholds: dict[str, Any], db_path: Path
         "raw_refs": raw_refs,
         "raw_manifest": raw_manifest,
         "raw_integrity": raw_integrity,
+        "ticket_cost_estimate": estimate_ticket_cost(),
         "outcome_summary": summarize_triggers(rows, trigger_records),
         "private_api": "not_used",
     }

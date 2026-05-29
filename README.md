@@ -69,3 +69,15 @@ It supports `/sol`, `/btc`, `/eth`, `/signal`, `/risk BTC`, and `/trace SOL`.
 Full pipeline commands such as `/solusdt` intentionally return a v0.2
 read-only placeholder until the real Telegram Bot polling layer is wired with
 environment variables.
+
+Run the real Telegram polling shell after creating a Bot and getting your chat
+id:
+
+```bash
+export TELEGRAM_BOT_TOKEN="..."
+export TELEGRAM_ALLOWED_CHAT_ID="..."
+python3 main.py tg-bot
+```
+
+The bot token and chat id are read from environment variables only. Do not put
+them in Git, prompts, reports, or chat logs.

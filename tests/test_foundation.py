@@ -16,6 +16,7 @@ from analysis.trigger_rate import audit_trigger_rates
 from collectors.manifest import build_public_manifest, default_manifest_path, file_sha256, write_manifest
 from collectors.okx_public import Candle, FundingRate, OkxPublicClient, OpenInterest, merge_rows
 from gateway.openclaw_bridge import render_single_event_markdown
+import notify.telegram_bot as telegram_bot
 from notify.telegram_commands import handle_command, parse_command
 from scripts.export_trace import export_trace
 from scripts.replay_phase_minus_1 import DEFAULT_SAMPLE, _load_rows, replay
@@ -224,6 +225,27 @@ class FoundationTests(unittest.TestCase):
         self.assertIn("Latest tickets", signal["response"])
         self.assertIn("latest risk", risk["response"])
         self.assertIn("not enabled in v0.2", full["response"])
+
+    def test_telegram_bot_polling_uses_allowed_chat_filter(self):
+        sent = []
+
+        def fake_get_updates(token, offset=None, timeout=2):
+            return [
+                {"update_id": 1, "message": {"chat": {"id": 111}, "text": "/sol"}},
+                {"update_id": 2, "message": {"chat": {"id": 222}, "text": "/help"}},
+            ]
+
+        def fake_send_message(token, chat_id, text):
+            sent.append((token, chat_id, text))
+            return {"ok": True}
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch.object(telegram_bot, "get_updates", fake_get_updates), patch.object(telegram_bot, "send_message", fake_send_message):
+                telegram_bot.run_polling(token="unit-token", allowed_chat_id="222", db_path=Path(tmpdir) / "test.db", once=True, poll_seconds=0)
+        self.assertEqual(len(sent), 1)
+        self.assertEqual(sent[0][0], "unit-token")
+        self.assertEqual(sent[0][1], "222")
+        self.assertIn("OpenClaw Perp Analyst commands", sent[0][2])
 
     def test_replay_includes_manifest_refs(self):
         rows = _load_rows(DEFAULT_SAMPLE)[:8]

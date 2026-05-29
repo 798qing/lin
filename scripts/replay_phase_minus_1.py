@@ -15,6 +15,7 @@ if str(ROOT) not in sys.path:
 
 from analysis import db
 from analysis.factors import rolling_factor_stats, simple_regime
+from analysis.indicators import enrich_rows
 from analysis.risk_validator import RiskInput, validate_risk
 from analysis.schema_validation import validate_ticket
 from analysis.simple_yaml import load_yaml
@@ -39,6 +40,12 @@ def main() -> None:
     if not rows:
         raise SystemExit(f"No rows found in {args.csv}")
 
+    rows = enrich_rows(
+        rows,
+        atr_period=int(thresholds["rolling_windows"]["atr_periods"]),
+        ema_fast=int(thresholds["regime_policy"]["trend"]["ema_fast"]),
+        ema_slow=int(thresholds["regime_policy"]["trend"]["ema_slow"]),
+    )
     report = replay(rows, thresholds, db_path, source_path=Path(args.csv))
     Path(args.report).parent.mkdir(parents=True, exist_ok=True)
     Path(args.report).write_text(json.dumps(report, indent=2, ensure_ascii=False, sort_keys=True), encoding="utf-8")
@@ -47,6 +54,13 @@ def main() -> None:
 
 def replay(rows: List[dict[str, Any]], thresholds: dict[str, Any], db_path: Path, source_path: Path) -> dict[str, Any]:
     db.migrate(db_path)
+    if rows and "atr" not in rows[0]:
+        rows = enrich_rows(
+            rows,
+            atr_period=int(thresholds.get("rolling_windows", {}).get("atr_periods", 14)),
+            ema_fast=int(thresholds.get("regime_policy", {}).get("trend", {}).get("ema_fast", 20)),
+            ema_slow=int(thresholds.get("regime_policy", {}).get("trend", {}).get("ema_slow", 50)),
+        )
     histories: Dict[str, Dict[str, Deque[float]]] = defaultdict(lambda: defaultdict(lambda: deque(maxlen=240)))
     trigger_counts: Dict[str, int] = defaultdict(int)
     inserted_events = 0
@@ -78,7 +92,10 @@ def replay(rows: List[dict[str, Any]], thresholds: dict[str, Any], db_path: Path
                     "close_ts": row["close_ts"],
                     "features": {
                         "close": row["close"],
+                        "ema_fast": row.get("ema_fast"),
+                        "ema_slow": row.get("ema_slow"),
                         "atr": row["atr"],
+                        "true_range": row.get("true_range"),
                         "atr_percentile": atr_stats.percentile,
                         "funding": row["funding"],
                         "funding_zscore": funding_stats.zscore,
@@ -168,9 +185,6 @@ def _load_rows(path: Path) -> List[dict[str, Any]]:
                     "volume": float(item["volume"]),
                     "funding": float(item["funding"]),
                     "oi": float(item["oi"]),
-                    "atr": max(float(item["high"]) - float(item["low"]), 0.0001),
-                    "ema_fast": float(item.get("ema_fast") or item["close"]),
-                    "ema_slow": float(item.get("ema_slow") or item["close"]),
                 }
             )
     return rows

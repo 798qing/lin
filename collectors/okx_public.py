@@ -80,6 +80,24 @@ class OkxPublicClient:
         candles = [_parse_candle(item, inst_id, bar) for item in payload.get("data", [])]
         return sorted(candles, key=lambda item: item.timestamp)
 
+    def history_candles_pages(self, inst_id: str, bar: str = "1H", limit: int = 100, pages: int = 1) -> List[Candle]:
+        if pages <= 0:
+            raise ValueError("pages must be positive")
+        per_page = min(max(limit, 1), 100)
+        after: Optional[int] = None
+        by_ts: Dict[int, Candle] = {}
+        for _ in range(pages):
+            candles = self.history_candles(inst_id, bar=bar, limit=per_page, after=after)
+            if not candles:
+                break
+            for candle in candles:
+                by_ts[candle.timestamp] = candle
+            earliest_ms = candles[0].timestamp * 1000
+            if after == earliest_ms:
+                break
+            after = earliest_ms
+        return sorted(by_ts.values(), key=lambda item: item.timestamp)
+
     def funding_rate_history(
         self,
         inst_id: str,
@@ -96,6 +114,24 @@ class OkxPublicClient:
             for item in payload.get("data", [])
         ]
         return sorted(rates, key=lambda item: item.timestamp)
+
+    def funding_rate_history_pages(self, inst_id: str, limit: int = 100, pages: int = 1) -> List[FundingRate]:
+        if pages <= 0:
+            raise ValueError("pages must be positive")
+        per_page = min(max(limit, 1), 100)
+        after: Optional[int] = None
+        by_ts: Dict[int, FundingRate] = {}
+        for _ in range(pages):
+            rates = self.funding_rate_history(inst_id, limit=per_page, after=after)
+            if not rates:
+                break
+            for rate in rates:
+                by_ts[rate.timestamp] = rate
+            earliest_ms = rates[0].timestamp * 1000
+            if after == earliest_ms:
+                break
+            after = earliest_ms
+        return sorted(by_ts.values(), key=lambda item: item.timestamp)
 
     def open_interest(self, inst_id: str) -> OpenInterest:
         payload = self.get_json("/api/v5/public/open-interest", {"instType": "SWAP", "instId": inst_id})

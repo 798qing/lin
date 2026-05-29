@@ -30,7 +30,7 @@ python3 -m gateway.openclaw_bridge data/latest_event.json --out reports/latest_e
 Fetch public OKX rows, then replay them:
 
 ```bash
-python3 scripts/fetch_okx_public.py --symbol BTC-USDT-SWAP --symbol ETH-USDT-SWAP --symbol SOL-USDT-SWAP --bar 1H --limit 100 --out data/okx_public_ohlcv.csv
+python3 scripts/fetch_okx_public.py --symbol BTC-USDT-SWAP --symbol ETH-USDT-SWAP --symbol SOL-USDT-SWAP --bar 1H --limit 100 --pages 3 --out data/okx_public_ohlcv.csv
 python3 main.py replay --csv data/okx_public_ohlcv.csv
 ```
 

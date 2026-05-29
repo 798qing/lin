@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from collectors.okx_public import Candle, FundingRate, OkxPublicClient, OpenInterest, merge_rows
 from analysis.factors import percentile_rank, robust_zscore, simple_regime, zscore
+from analysis.indicators import enrich_rows
 from analysis.risk_validator import APPROVED, REJECTED, WATCH_ONLY, RiskInput, validate_risk
 from analysis.schema_validation import validate_event
 from scripts.replay_phase_minus_1 import DEFAULT_SAMPLE, _load_rows, replay
@@ -21,6 +22,39 @@ class FoundationTests(unittest.TestCase):
         self.assertAlmostEqual(robust_zscore(6, history), 2.0235)
         self.assertEqual(percentile_rank(5, history), 0.9)
         self.assertEqual(simple_regime(10, 11, 10, 0.9), "high_volatility")
+
+    def test_indicator_enrichment(self):
+        rows = [
+            {
+                "close_ts": 1,
+                "symbol": "SOL-USDT-SWAP",
+                "timeframe": "1H",
+                "open": 10.0,
+                "high": 12.0,
+                "low": 9.0,
+                "close": 11.0,
+                "volume": 100.0,
+                "funding": 0.0,
+                "oi": 1000.0,
+            },
+            {
+                "close_ts": 2,
+                "symbol": "SOL-USDT-SWAP",
+                "timeframe": "1H",
+                "open": 11.0,
+                "high": 15.0,
+                "low": 10.0,
+                "close": 14.0,
+                "volume": 100.0,
+                "funding": 0.0,
+                "oi": 1000.0,
+            },
+        ]
+        enriched = enrich_rows(rows, atr_period=14, ema_fast=2, ema_slow=3)
+        self.assertEqual(enriched[0]["true_range"], 3.0)
+        self.assertEqual(enriched[1]["true_range"], 5.0)
+        self.assertEqual(enriched[1]["atr"], 4.0)
+        self.assertGreater(enriched[1]["ema_fast"], enriched[0]["ema_fast"])
 
     def test_event_builder_validates_schema(self):
         event = build_event(
@@ -124,6 +158,36 @@ class FoundationTests(unittest.TestCase):
         self.assertEqual(rows[0]["funding"], 0.0)
         self.assertEqual(rows[1]["funding"], 0.0002)
         self.assertEqual(rows[1]["oi"], 12345)
+
+    def test_okx_public_candle_pagination(self):
+        pages = [
+            {
+                "code": "0",
+                "data": [
+                    ["3000000", "3", "4", "2", "3.5", "30"],
+                    ["2000000", "2", "3", "1", "2.5", "20"],
+                ],
+            },
+            {
+                "code": "0",
+                "data": [
+                    ["2000000", "2", "3", "1", "2.5", "20"],
+                    ["1000000", "1", "2", "0.5", "1.5", "10"],
+                ],
+            },
+        ]
+        seen_urls = []
+
+        def fake_get_json(path, params):
+            seen_urls.append(params)
+            return pages.pop(0) if pages else {"code": "0", "data": []}
+
+        client = OkxPublicClient(sleep_seconds=0)
+        with patch.object(client, "get_json", fake_get_json):
+            candles = client.history_candles_pages("BTC-USDT-SWAP", bar="1H", limit=2, pages=2)
+        self.assertEqual([item.timestamp for item in candles], [1000, 2000, 3000])
+        self.assertIsNone(seen_urls[0]["after"])
+        self.assertEqual(seen_urls[1]["after"], 2000000)
 
 
 if __name__ == "__main__":

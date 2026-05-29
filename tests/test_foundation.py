@@ -12,6 +12,7 @@ from analysis.prompt_audit import audit_prompts
 from analysis.risk_validator import APPROVED, REJECTED, WATCH_ONLY, RiskInput, validate_risk
 from analysis.schema_validation import validate_event
 from analysis.simple_yaml import load_yaml
+from analysis.trigger_rate import audit_trigger_rates
 from collectors.manifest import build_public_manifest, default_manifest_path, file_sha256, write_manifest
 from collectors.okx_public import Candle, FundingRate, OkxPublicClient, OpenInterest, merge_rows
 from gateway.openclaw_bridge import render_single_event_markdown
@@ -158,6 +159,7 @@ class FoundationTests(unittest.TestCase):
         self.assertEqual(report["ticket_cost_estimate"]["private_api"], "not_used")
         self.assertIn("CANDLE_CLOSE_1H", report["trigger_evidence_summary"])
         self.assertEqual(report["trigger_evidence_summary"]["CANDLE_CLOSE_1H"]["distribution_positions"]["scheduled"], 8)
+        self.assertEqual(report["trigger_rate_audit"]["status"], "PASS")
 
     def test_export_trace_reconstructs_event_chain(self):
         rows = _load_rows(DEFAULT_SAMPLE)[:8]
@@ -338,6 +340,51 @@ class FoundationTests(unittest.TestCase):
         self.assertEqual(parsed["version"], "thresholds_v0.1")
         self.assertTrue(parsed["calibration"]["review_required"])
         self.assertIn("data_quality", parsed)
+        self.assertIn("guardrails", parsed)
+
+    def test_trigger_rate_audit_flags_high_frequency(self):
+        rows = [
+            {
+                "close_ts": 1000 + index * 3600,
+                "symbol": "SOL-USDT-SWAP",
+                "timeframe": "1H",
+            }
+            for index in range(24)
+        ]
+        records = [
+            {
+                "close_ts": row["close_ts"],
+                "symbol": row["symbol"],
+                "timeframe": row["timeframe"],
+                "trigger_type": "CANDLE_CLOSE_1H",
+            }
+            for row in rows
+        ]
+        report = audit_trigger_rates(rows, records, max_triggers_per_symbol_day=6)
+        self.assertEqual(report["status"], "PASS")
+        self.assertEqual(report["groups"]["SOL-USDT-SWAP|1H|CANDLE_CLOSE_1H"]["status"], "EXEMPT_SCHEDULED")
+
+    def test_trigger_rate_audit_flags_high_frequency_non_scheduled(self):
+        rows = [
+            {
+                "close_ts": 1000 + index * 3600,
+                "symbol": "SOL-USDT-SWAP",
+                "timeframe": "1H",
+            }
+            for index in range(24)
+        ]
+        records = [
+            {
+                "close_ts": row["close_ts"],
+                "symbol": row["symbol"],
+                "timeframe": row["timeframe"],
+                "trigger_type": "FUNDING_SPIKE",
+            }
+            for row in rows
+        ]
+        report = audit_trigger_rates(rows, records, max_triggers_per_symbol_day=6)
+        self.assertEqual(report["status"], "WARN")
+        self.assertEqual(report["issues"][0]["code"], "TRIGGER_RATE_HIGH")
 
     def test_ticket_cost_estimate_budget_status(self):
         estimate = estimate_ticket_cost(ROOT / "config" / "cost_budget.yaml")

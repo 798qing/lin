@@ -48,6 +48,9 @@ overwrite `config/thresholds.yaml`.
 `fetch_okx_public.py` also writes `<csv>.manifest.json` with public data source
 metadata and sha256 hashes. Replay reports include that manifest in `raw_refs`
 when present and flag raw-data hash mismatches in `raw_integrity`.
+Replay reports also include `trigger_evidence_summary` and `trigger_rate_audit`
+so Phase -1 can explain why each trigger fired and whether non-scheduled
+triggers are too noisy.
 
 `main.py trace` exports a read-only audit trace for the latest event, including
 the frozen event input, analysis runs, risk checks, tickets, version fields, and

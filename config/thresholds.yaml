@@ -6,6 +6,8 @@ calibration:
   train_end: null
   test_start: null
   test_end: null
+guardrails:
+  max_triggers_per_symbol_day: 12.0
 rolling_windows:
   funding_days: 90
   oi_days: 30

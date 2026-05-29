@@ -22,6 +22,7 @@ from analysis.indicators import enrich_rows
 from analysis.risk_validator import RiskInput, validate_risk
 from analysis.schema_validation import validate_ticket
 from analysis.simple_yaml import load_yaml
+from analysis.trigger_rate import audit_trigger_rates
 from collectors.manifest import default_manifest_path, file_sha256, load_manifest_for_csv
 from watchdog.event_builder import build_event
 
@@ -186,6 +187,11 @@ def replay(rows: List[dict[str, Any]], thresholds: dict[str, Any], db_path: Path
         "tickets": tickets,
         "trigger_counts": dict(sorted(trigger_counts.items())),
         "trigger_evidence_summary": _trigger_evidence_summary(trigger_records),
+        "trigger_rate_audit": audit_trigger_rates(
+            rows,
+            trigger_records,
+            max_triggers_per_symbol_day=float(thresholds.get("guardrails", {}).get("max_triggers_per_symbol_day", 12.0)),
+        ),
         "data_quality": data_quality,
         "raw_refs": raw_refs,
         "raw_manifest": raw_manifest,

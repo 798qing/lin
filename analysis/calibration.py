@@ -90,6 +90,7 @@ def suggest_thresholds(rows: Iterable[dict[str, Any]], base_thresholds: dict[str
             "review_required": True,
             "note": "Candidate only; do not auto-promote without manual review and larger samples.",
         },
+        "guardrails": base_thresholds.get("guardrails", {}),
         "rolling_windows": base_thresholds.get("rolling_windows", {}),
         "triggers": {
             "funding_spike": {

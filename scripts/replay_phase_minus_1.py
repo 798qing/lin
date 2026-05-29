@@ -15,6 +15,7 @@ if str(ROOT) not in sys.path:
 
 from analysis import db
 from analysis.calibration import summarize_triggers
+from analysis.data_quality import audit_rows
 from analysis.factors import rolling_factor_stats, simple_regime
 from analysis.indicators import enrich_rows
 from analysis.risk_validator import RiskInput, validate_risk
@@ -62,6 +63,7 @@ def replay(rows: List[dict[str, Any]], thresholds: dict[str, Any], db_path: Path
             ema_fast=int(thresholds.get("regime_policy", {}).get("trend", {}).get("ema_fast", 20)),
             ema_slow=int(thresholds.get("regime_policy", {}).get("trend", {}).get("ema_slow", 50)),
         )
+    data_quality = audit_rows(rows)
     histories: Dict[str, Dict[str, Deque[float]]] = defaultdict(lambda: defaultdict(lambda: deque(maxlen=240)))
     trigger_counts: Dict[str, int] = defaultdict(int)
     trigger_records: List[dict[str, Any]] = []
@@ -175,6 +177,7 @@ def replay(rows: List[dict[str, Any]], thresholds: dict[str, Any], db_path: Path
         "duplicate_events": duplicate_events,
         "tickets": tickets,
         "trigger_counts": dict(sorted(trigger_counts.items())),
+        "data_quality": data_quality,
         "outcome_summary": summarize_triggers(rows, trigger_records),
         "private_api": "not_used",
     }

@@ -10,6 +10,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from analysis.calibration import dump_thresholds_yaml, suggest_thresholds
+from analysis.data_quality import audit_rows
 from analysis.indicators import enrich_rows
 from analysis.simple_yaml import load_yaml
 from scripts.replay_phase_minus_1 import DEFAULT_SAMPLE, _load_rows
@@ -35,6 +36,7 @@ def main() -> None:
         ema_slow=int(base["regime_policy"]["trend"]["ema_slow"]),
     )
     candidate = suggest_thresholds(rows, base)
+    candidate["data_quality"] = audit_rows(rows)
 
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)

@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from analysis.calibration import dump_thresholds_yaml, summarize_triggers, suggest_thresholds
+from analysis.data_quality import audit_rows
 from analysis.factors import percentile_rank, robust_zscore, simple_regime, zscore
 from analysis.indicators import enrich_rows
 from analysis.risk_validator import APPROVED, REJECTED, WATCH_ONLY, RiskInput, validate_risk
@@ -120,6 +121,53 @@ class FoundationTests(unittest.TestCase):
         self.assertEqual(report["private_api"], "not_used")
         self.assertGreater(report["inserted_events"], 0)
         self.assertIn("outcome_summary", report)
+        self.assertIn("data_quality", report)
+
+    def test_data_quality_audit(self):
+        rows = [
+            {
+                "close_ts": 1000,
+                "symbol": "SOL-USDT-SWAP",
+                "timeframe": "1H",
+                "open": 10.0,
+                "high": 11.0,
+                "low": 9.0,
+                "close": 10.5,
+                "volume": 100.0,
+                "funding": 0.0,
+                "oi": 1000.0,
+            },
+            {
+                "close_ts": 1000,
+                "symbol": "SOL-USDT-SWAP",
+                "timeframe": "1H",
+                "open": 12.0,
+                "high": 11.0,
+                "low": 9.0,
+                "close": 10.5,
+                "volume": 100.0,
+                "funding": 0.0,
+                "oi": 1000.0,
+            },
+            {
+                "close_ts": 8200,
+                "symbol": "SOL-USDT-SWAP",
+                "timeframe": "1H",
+                "open": 10.0,
+                "high": 11.0,
+                "low": 9.0,
+                "close": 10.5,
+                "volume": 100.0,
+                "funding": 0.0,
+                "oi": 1000.0,
+            },
+        ]
+        report = audit_rows(rows)
+        codes = {issue["code"] for issue in report["issues"]}
+        self.assertEqual(report["status"], "FAIL")
+        self.assertIn("DUPLICATE_CLOSE_TS", codes)
+        self.assertIn("OHLC_OPEN_OUT_OF_RANGE", codes)
+        self.assertIn("INTERVAL_GAP", codes)
 
     def test_calibration_outcome_summary(self):
         rows = [
@@ -153,6 +201,7 @@ class FoundationTests(unittest.TestCase):
         base = load_yaml(ROOT / "config" / "thresholds.yaml")
         rows = enrich_rows(_load_rows(DEFAULT_SAMPLE), atr_period=14, ema_fast=20, ema_slow=50)
         candidate = suggest_thresholds(rows, base)
+        candidate["data_quality"] = audit_rows(rows)
         self.assertTrue(candidate["calibration"]["review_required"])
         self.assertEqual(candidate["status"], "candidate_from_phase_minus_1_replay")
         self.assertIn("feature_distribution", candidate)
@@ -163,6 +212,7 @@ class FoundationTests(unittest.TestCase):
             parsed = load_yaml(path)
         self.assertEqual(parsed["version"], "thresholds_v0.1")
         self.assertTrue(parsed["calibration"]["review_required"])
+        self.assertIn("data_quality", parsed)
 
     def test_okx_public_request_has_no_private_auth_headers(self):
         seen = {}

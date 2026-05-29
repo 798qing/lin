@@ -16,6 +16,7 @@ from analysis.trigger_rate import audit_trigger_rates
 from collectors.manifest import build_public_manifest, default_manifest_path, file_sha256, write_manifest
 from collectors.okx_public import Candle, FundingRate, OkxPublicClient, OpenInterest, merge_rows
 from gateway.openclaw_bridge import render_single_event_markdown
+from notify.telegram_commands import handle_command, parse_command
 from scripts.export_trace import export_trace
 from scripts.replay_phase_minus_1 import DEFAULT_SAMPLE, _load_rows, replay
 from watchdog.event_builder import build_event
@@ -189,6 +190,40 @@ class FoundationTests(unittest.TestCase):
         self.assertEqual(evidence["trigger_type"], trace["event"]["trigger_type"])
         self.assertIn("reason", evidence)
         self.assertIn("distribution_position", evidence)
+
+    def test_telegram_command_parser(self):
+        self.assertEqual(parse_command("/sol").kind, "QUICK_LOOKUP")
+        self.assertEqual(parse_command("/sol").symbol, "SOL-USDT-SWAP")
+        self.assertEqual(parse_command("/risk BTC").kind, "RISK")
+        self.assertEqual(parse_command("/solusdt").kind, "FULL_PIPELINE")
+
+    def test_telegram_command_dry_run_uses_frozen_db(self):
+        rows = _load_rows(DEFAULT_SAMPLE)[:8]
+        thresholds = {
+            "version": "thresholds_v0.1",
+            "regime_policy": {
+                "high_volatility": {"atr_percentile_min": 0.85},
+                "range": {"ema_spread_max_atr": 0.5},
+            },
+            "triggers": {
+                "funding_spike": {"zscore_min": 2.0, "robust_zscore_min": 2.5, "percentile_min": 0.95},
+                "oi_pulse": {"percentile_min": 0.95},
+                "volatility_breakout": {"atr_percentile_min": 0.9},
+            },
+        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "test.db"
+            replay(rows, thresholds, db_path, DEFAULT_SAMPLE)
+            quick = handle_command("/sol", db_path)
+            signal = handle_command("/signal", db_path)
+            risk = handle_command("/risk SOL", db_path)
+            full = handle_command("/solusdt", db_path)
+        self.assertEqual(quick["private_api"], "not_used")
+        self.assertEqual(quick["command"], "QUICK_LOOKUP")
+        self.assertIn("snapshot_hash", quick["response"])
+        self.assertIn("Latest tickets", signal["response"])
+        self.assertIn("latest risk", risk["response"])
+        self.assertIn("not enabled in v0.2", full["response"])
 
     def test_replay_includes_manifest_refs(self):
         rows = _load_rows(DEFAULT_SAMPLE)[:8]

@@ -5,6 +5,7 @@ import argparse
 from scripts.init_db import main as init_db
 from scripts.replay_phase_minus_1 import main as replay
 from scripts.export_trace import main as trace
+from scripts.telegram_command_dry_run import main as tg
 
 
 def main() -> None:
@@ -13,6 +14,7 @@ def main() -> None:
     subparsers.add_parser("init-db")
     subparsers.add_parser("replay")
     subparsers.add_parser("trace")
+    subparsers.add_parser("tg")
     args, unknown = parser.parse_known_args()
     if args.command == "init-db":
         init_db()
@@ -26,6 +28,11 @@ def main() -> None:
 
         sys.argv = [sys.argv[0]] + unknown
         trace()
+    elif args.command == "tg":
+        import sys
+
+        sys.argv = [sys.argv[0]] + unknown
+        tg()
 
 
 if __name__ == "__main__":

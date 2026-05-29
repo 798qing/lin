@@ -28,6 +28,8 @@ python3 main.py trace --out reports/latest_trace.json
 python3 scripts/estimate_ticket_cost.py --out reports/ticket_cost_estimate.json
 python3 scripts/audit_prompts.py --out reports/prompt_boundary_audit.json
 python3 -m gateway.openclaw_bridge data/latest_event.json --out reports/latest_event.md
+python3 main.py tg "/sol"
+python3 main.py tg "/risk SOL"
 ```
 
 Fetch public OKX rows, then replay them:
@@ -61,3 +63,9 @@ prompt files and `config/cost_budget.yaml`. It does not call any model.
 
 `audit_prompts.py` checks local Agent prompts for frozen-snapshot, no-live-fetch,
 no-private-API, and manual-review boundaries.
+
+`main.py tg` dry-runs Telegram commands against local SQLite without a bot token.
+It supports `/sol`, `/btc`, `/eth`, `/signal`, `/risk BTC`, and `/trace SOL`.
+Full pipeline commands such as `/solusdt` intentionally return a v0.2
+read-only placeholder until the real Telegram Bot polling layer is wired with
+environment variables.

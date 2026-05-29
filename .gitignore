@@ -16,6 +16,7 @@ data/okx_public_*.csv
 # Generated reports
 reports/*.json
 reports/*.md
+reports/*.yaml
 
 # Local editor / OS files
 .DS_Store

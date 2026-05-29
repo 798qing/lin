@@ -3,11 +3,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from analysis.calibration import summarize_triggers
+from analysis.calibration import dump_thresholds_yaml, summarize_triggers, suggest_thresholds
 from analysis.factors import percentile_rank, robust_zscore, simple_regime, zscore
 from analysis.indicators import enrich_rows
 from analysis.risk_validator import APPROVED, REJECTED, WATCH_ONLY, RiskInput, validate_risk
 from analysis.schema_validation import validate_event
+from analysis.simple_yaml import load_yaml
 from collectors.okx_public import Candle, FundingRate, OkxPublicClient, OpenInterest, merge_rows
 from scripts.replay_phase_minus_1 import DEFAULT_SAMPLE, _load_rows, replay
 from watchdog.event_builder import build_event
@@ -147,6 +148,21 @@ class FoundationTests(unittest.TestCase):
         self.assertEqual(trigger_summary["4"]["missing_future"], 1)
         self.assertIn("CANDLE_CLOSE_1H|train", report["by_trigger_and_split"])
         self.assertIn("CANDLE_CLOSE_1H|test", report["by_trigger_and_split"])
+
+    def test_threshold_candidate_round_trip(self):
+        base = load_yaml(ROOT / "config" / "thresholds.yaml")
+        rows = enrich_rows(_load_rows(DEFAULT_SAMPLE), atr_period=14, ema_fast=20, ema_slow=50)
+        candidate = suggest_thresholds(rows, base)
+        self.assertTrue(candidate["calibration"]["review_required"])
+        self.assertEqual(candidate["status"], "candidate_from_phase_minus_1_replay")
+        self.assertIn("feature_distribution", candidate)
+        yaml_text = dump_thresholds_yaml(candidate)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "candidate.yaml"
+            path.write_text(yaml_text, encoding="utf-8")
+            parsed = load_yaml(path)
+        self.assertEqual(parsed["version"], "thresholds_v0.1")
+        self.assertTrue(parsed["calibration"]["review_required"])
 
     def test_okx_public_request_has_no_private_auth_headers(self):
         seen = {}

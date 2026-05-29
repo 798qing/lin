@@ -32,8 +32,12 @@ Fetch public OKX rows, then replay them:
 ```bash
 python3 scripts/fetch_okx_public.py --symbol BTC-USDT-SWAP --symbol ETH-USDT-SWAP --symbol SOL-USDT-SWAP --bar 1H --limit 100 --pages 3 --out data/okx_public_ohlcv.csv
 python3 main.py replay --csv data/okx_public_ohlcv.csv
+python3 scripts/calibrate_thresholds.py --csv data/okx_public_ohlcv.csv --out reports/thresholds_candidate.yaml
 ```
 
 The OKX collector uses public market endpoints only. It has no API key,
 secret, passphrase, signing code, account endpoint, position endpoint, order
 endpoint, or execution path.
+
+`calibrate_thresholds.py` writes a review-only candidate file. It does not
+overwrite `config/thresholds.yaml`.

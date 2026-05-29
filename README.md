@@ -26,6 +26,7 @@ python3 main.py replay
 python3 scripts/export_latest_event.py --out data/latest_event.json
 python3 main.py trace --out reports/latest_trace.json
 python3 scripts/estimate_ticket_cost.py --out reports/ticket_cost_estimate.json
+python3 scripts/audit_prompts.py --out reports/prompt_boundary_audit.json
 python3 -m gateway.openclaw_bridge data/latest_event.json --out reports/latest_event.md
 ```
 
@@ -54,3 +55,6 @@ traceability status.
 
 `estimate_ticket_cost.py` estimates the per-ticket LLM cost budget from local
 prompt files and `config/cost_budget.yaml`. It does not call any model.
+
+`audit_prompts.py` checks local Agent prompts for frozen-snapshot, no-live-fetch,
+no-private-API, and manual-review boundaries.

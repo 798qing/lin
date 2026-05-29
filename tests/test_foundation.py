@@ -8,6 +8,7 @@ from analysis.costing import estimate_ticket_cost
 from analysis.data_quality import audit_rows
 from analysis.factors import percentile_rank, robust_zscore, simple_regime, zscore
 from analysis.indicators import enrich_rows
+from analysis.prompt_audit import audit_prompts
 from analysis.risk_validator import APPROVED, REJECTED, WATCH_ONLY, RiskInput, validate_risk
 from analysis.schema_validation import validate_event
 from analysis.simple_yaml import load_yaml
@@ -336,6 +337,26 @@ class FoundationTests(unittest.TestCase):
             )
             estimate = estimate_ticket_cost(config_path)
         self.assertEqual(estimate["status"], "REDUCE_AGENT_ROUNDS")
+
+    def test_prompt_boundary_audit_passes(self):
+        report = audit_prompts(ROOT / "config" / "prompts", ROOT / "config" / "prompt_boundaries.yaml")
+        self.assertEqual(report["private_api"], "not_used")
+        self.assertEqual(report["status"], "PASS")
+        self.assertEqual(report["prompt_count"], 5)
+
+    def test_prompt_boundary_audit_flags_forbidden_terms(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            prompt_dir = Path(tmpdir) / "prompts"
+            prompt_dir.mkdir()
+            (prompt_dir / "bad.md").write_text(
+                "Read frozen snapshot. Do not fetch live data. No account, position, order, or private API. Manual review. place order",
+                encoding="utf-8",
+            )
+            boundary_path = Path(tmpdir) / "prompt_boundaries.yaml"
+            boundary_path.write_text((ROOT / "config" / "prompt_boundaries.yaml").read_text(encoding="utf-8"), encoding="utf-8")
+            report = audit_prompts(prompt_dir, boundary_path)
+        self.assertEqual(report["status"], "FAIL")
+        self.assertEqual(report["prompts"][0]["issues"][0]["code"], "FORBIDDEN_TERM_PRESENT")
 
     def test_okx_public_request_has_no_private_auth_headers(self):
         seen = {}

@@ -1,0 +1,19 @@
+version: prompt_boundaries_v0.1
+required_terms:
+  frozen_snapshot:
+    - frozen
+  no_private_api:
+    - private api
+    - account
+    - position
+    - order
+  no_live_fetch:
+    - do not fetch
+  manual_review:
+    - manual
+forbidden_terms:
+  - place order
+  - execute trade
+  - api key
+  - secret
+  - passphrase

@@ -1,7 +1,9 @@
 # Sentiment Prompt v0.1
 
-Use only external information already attached to the run input snapshot.
+Use only external information already attached to the frozen run input snapshot.
 
 Every item must include source, published_at, fetched_at, and credibility
 (`HIGH`, `MEDIUM`, `LOW`, or `UNKNOWN`). Sentiment alone cannot upgrade a setup
 from `NO_TRADE` to `CONSIDER_LONG` or `CONSIDER_SHORT`.
+Do not fetch live market, account, position, order, or private API data.
+Output analysis for manual review only.

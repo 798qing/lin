@@ -11,6 +11,7 @@ venv/
 data/*.db
 data/*.db-*
 data/latest_event.json
+data/okx_public_*.csv
 
 # Generated reports
 reports/*.json

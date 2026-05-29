@@ -1,7 +1,9 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+from collectors.okx_public import Candle, FundingRate, OkxPublicClient, OpenInterest, merge_rows
 from analysis.factors import percentile_rank, robust_zscore, simple_regime, zscore
 from analysis.risk_validator import APPROVED, REJECTED, WATCH_ONLY, RiskInput, validate_risk
 from analysis.schema_validation import validate_event
@@ -81,6 +83,47 @@ class FoundationTests(unittest.TestCase):
             report = replay(rows, thresholds, Path(tmpdir) / "test.db", DEFAULT_SAMPLE)
         self.assertEqual(report["private_api"], "not_used")
         self.assertGreater(report["inserted_events"], 0)
+
+    def test_okx_public_request_has_no_private_auth_headers(self):
+        seen = {}
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def read(self):
+                return b'{"code":"0","data":[]}'
+
+        def fake_urlopen(request, timeout):
+            seen["headers"] = dict(request.header_items())
+            seen["url"] = request.full_url
+            return FakeResponse()
+
+        client = OkxPublicClient(base_url="https://example.test", sleep_seconds=0)
+        with patch("urllib.request.urlopen", fake_urlopen):
+            client.get_json("/api/v5/market/history-candles", {"instId": "BTC-USDT-SWAP"})
+        header_keys = {key.lower() for key in seen["headers"]}
+        self.assertIn("user-agent", header_keys)
+        self.assertNotIn("ok-access-key", header_keys)
+        self.assertNotIn("ok-access-sign", header_keys)
+        self.assertNotIn("ok-access-passphrase", header_keys)
+        self.assertIn("/api/v5/market/history-candles", seen["url"])
+
+    def test_okx_public_merge_rows(self):
+        rows = merge_rows(
+            candles=[
+                Candle(1000, "BTC-USDT-SWAP", "1H", 1, 2, 0.5, 1.5, 10),
+                Candle(2000, "BTC-USDT-SWAP", "1H", 1.5, 2.5, 1, 2, 11),
+            ],
+            funding_rates=[FundingRate(1500, "BTC-USDT-SWAP", 0.0002)],
+            open_interest=OpenInterest(2000, "BTC-USDT-SWAP", 12345),
+        )
+        self.assertEqual(rows[0]["funding"], 0.0)
+        self.assertEqual(rows[1]["funding"], 0.0002)
+        self.assertEqual(rows[1]["oi"], 12345)
 
 
 if __name__ == "__main__":

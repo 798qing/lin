@@ -24,6 +24,7 @@ Quick check:
 python3 main.py init-db
 python3 main.py replay
 python3 scripts/export_latest_event.py --out data/latest_event.json
+python3 main.py trace --out reports/latest_trace.json
 python3 -m gateway.openclaw_bridge data/latest_event.json --out reports/latest_event.md
 ```
 
@@ -43,4 +44,9 @@ endpoint, or execution path.
 overwrite `config/thresholds.yaml`.
 
 `fetch_okx_public.py` also writes `<csv>.manifest.json` with public data source
-metadata. Replay reports include that manifest in `raw_refs` when present.
+metadata and sha256 hashes. Replay reports include that manifest in `raw_refs`
+when present and flag raw-data hash mismatches in `raw_integrity`.
+
+`main.py trace` exports a read-only audit trace for the latest event, including
+the frozen event input, analysis runs, risk checks, tickets, version fields, and
+traceability status.

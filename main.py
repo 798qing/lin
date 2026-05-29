@@ -4,6 +4,7 @@ import argparse
 
 from scripts.init_db import main as init_db
 from scripts.replay_phase_minus_1 import main as replay
+from scripts.export_trace import main as trace
 
 
 def main() -> None:
@@ -11,6 +12,7 @@ def main() -> None:
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("init-db")
     subparsers.add_parser("replay")
+    subparsers.add_parser("trace")
     args, unknown = parser.parse_known_args()
     if args.command == "init-db":
         init_db()
@@ -19,6 +21,11 @@ def main() -> None:
 
         sys.argv = [sys.argv[0]] + unknown
         replay()
+    elif args.command == "trace":
+        import sys
+
+        sys.argv = [sys.argv[0]] + unknown
+        trace()
 
 
 if __name__ == "__main__":
